@@ -105,7 +105,7 @@ This means you cannot use a directory that located directly on the host Windows 
 The next three steps are an example of how to acquire the source in an appropriate way.
 
     cd /usr/src
-    sudo git clone https://github.com/MTTcoin-project/MTTcoin.git
+    sudo git clone https://github.com/mttcoin/MTTcoin-core.git
     sudo chmod -R a+rw MTTcoin
 
 Once the source code is ready the build steps are below.
@@ -135,7 +135,7 @@ This means you cannot use a directory that located directly on the host Windows 
 The next three steps are an example of how to acquire the source in an appropriate way.
 
     cd /usr/src
-    sudo git clone https://github.com/MTTcoin-project/MTTcoin.git
+    sudo git clone https://github.com/mttcoin/MTTcoin-core.git
     sudo chmod -R a+rw MTTcoin
 
 Then build using:
