@@ -1319,6 +1319,111 @@ UniValue getchaintips(const JSONRPCRequest& request)
     return res;
 }
 
+
+UniValue getchaintipsdelays(const JSONRPCRequest& request)
+{
+    if (request.fHelp || request.params.size() != 0)
+        throw std::runtime_error(
+            "getchaintipsdelays\n"
+            "Return information about all known tips in the block tree with their delays,"
+            " including the main chain as well as orphaned branches.\n"
+            "\nResult:\n"
+            "[\n"
+            "  {\n"
+            "    \"height\": xxxx,         (numeric) height of the chain tip\n"
+            "    \"hash\": \"xxxx\",         (string) block hash of the tip\n"
+            "    \"branchlen\": 0          (numeric) zero for main chain\n"
+            "    \"status\": \"active\"      (string) \"active\" for the main chain\n"
+            "  },\n"
+            "  {\n"
+            "    \"height\": xxxx,\n"
+            "    \"hash\": \"xxxx\",\n"
+            "    \"branchlen\": 1          (numeric) length of branch connecting the tip to the main chain\n"
+            "    \"status\": \"xxxx\"        (string) status of the chain (active, valid-fork, valid-headers, headers-only, invalid)\n"
+            "  }\n"
+            "]\n"
+            "Possible values for status:\n"
+            "1.  \"invalid\"               This branch contains at least one invalid block\n"
+            "2.  \"headers-only\"          Not all blocks for this branch are available, but the headers are valid\n"
+            "3.  \"valid-headers\"         All blocks are available for this branch, but they were never fully validated\n"
+            "4.  \"valid-fork\"            This branch is not part of the active chain, but is fully validated\n"
+            "5.  \"active\"                This is the tip of the active main chain, which is certainly valid\n"
+            "\nExamples:\n"
+            + HelpExampleCli("getchaintips", "")
+            + HelpExampleRpc("getchaintips", "")
+        );
+
+    LOCK(cs_main);
+
+    /*
+     * Idea:  the set of chain tips is chainActive.tip, plus orphan blocks which do not have another orphan building off of them.
+     * Algorithm:
+     *  - Make one pass through mapBlockIndex, picking out the orphan blocks, and also storing a set of the orphan block's pprev pointers.
+     *  - Iterate through the orphan blocks. If the block isn't pointed to by another orphan, it is a chain tip.
+     *  - add chainActive.Tip()
+     */
+    std::set<const CBlockIndex*, CompareBlocksByHeight> setTips;
+    std::set<const CBlockIndex*> setOrphans;
+    std::set<const CBlockIndex*> setPrevs;
+
+    for (const std::pair<const uint256, CBlockIndex*>& item : mapBlockIndex)
+    {
+        if (!chainActive.Contains(item.second)) {
+            setOrphans.insert(item.second);
+            setPrevs.insert(item.second->pprev);
+        }
+    }
+
+    for (std::set<const CBlockIndex*>::iterator it = setOrphans.begin(); it != setOrphans.end(); ++it)
+    {
+        if (setPrevs.erase(*it) == 0) {
+            setTips.insert(*it);
+        }
+    }
+
+    // Always report the currently active tip.
+    setTips.insert(chainActive.Tip());
+
+    /* Construct the output array.  */
+    UniValue res(UniValue::VARR);
+    for (const CBlockIndex* block : setTips)
+    {
+        UniValue obj(UniValue::VOBJ);
+        obj.push_back(Pair("height", block->nHeight));
+        obj.push_back(Pair("hash", block->phashBlock->GetHex()));
+
+        const int branchLen = block->nHeight - chainActive.FindFork(block)->nHeight;
+        obj.push_back(Pair("branchlen", branchLen));
+
+        std::string status;
+        if (chainActive.Contains(block)) {
+            // This block is part of the currently active chain.
+            status = "active";
+        } else if (block->nStatus & BLOCK_FAILED_MASK) {
+            // This block or one of its ancestors is invalid.
+            status = "invalid";
+        } else if (block->nChainTx == 0) {
+            // This block cannot be connected because full block data for it or one of its parents is missing.
+            status = "headers-only (delay=" + std::to_string(block->nChainDelay) + ")";
+        } else if (block->IsValid(BLOCK_VALID_SCRIPTS)) {
+            // This block is fully validated, but no longer part of the active chain. It was probably the active block once, but was reorganized.
+            status = "valid-fork (delay=" + std::to_string(block->nChainDelay) + ")";
+        } else if (block->IsValid(BLOCK_VALID_TREE)) {
+            // The headers for this block are valid, but it has not been validated. It was probably never part of the most-work chain.
+            status = "valid-headers (delay=" + std::to_string(block->nChainDelay) + ")";
+        } else {
+            // No clue.
+            status = "unknown";
+        }
+        obj.push_back(Pair("status", status));
+
+        res.push_back(obj);
+    }
+
+    return res;
+}
+
+
 UniValue mempoolInfoToJSON()
 {
     UniValue ret(UniValue::VOBJ);
@@ -1562,6 +1667,7 @@ static const CRPCCommand commands[] =
     { "hidden",             "waitfornewblock",        &waitfornewblock,        true,  {"timeout"} },
     { "hidden",             "waitforblock",           &waitforblock,           true,  {"blockhash","timeout"} },
     { "hidden",             "waitforblockheight",     &waitforblockheight,     true,  {"height","timeout"} },
+    { "hidden",             "getchaintipsdelays",     &getchaintipsdelays,     true,  {} },
 };
 
 void RegisterBlockchainRPCCommands(CRPCTable &t)
