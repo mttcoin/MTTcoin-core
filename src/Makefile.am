@@ -156,7 +156,7 @@ BITCOIN_CORE_H = \
   utilmoneystr.h \
   utiltime.h \
   validation.h \
-  delay.h \
+  MTT/delay.h \
   validationinterface.h \
   versionbits.h \
   wallet/coincontrol.h \
@@ -218,7 +218,7 @@ libbitcoin_server_a_SOURCES = \
   txmempool.cpp \
   ui_interface.cpp \
   validation.cpp \
-  delay.cpp \
+  MTT/delay.cpp \
   validationinterface.cpp \
   versionbits.cpp \
   $(BITCOIN_CORE_H)
